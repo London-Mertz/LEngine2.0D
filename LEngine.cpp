@@ -648,7 +648,7 @@ struct ImageMap {
                 Uint8 r, g, b, a;
                 SDL_GetRGBA(pixels[y * (converted->pitch / 4) + x], fmtDetails, nullptr, &r, &g, &b, &a);
                 if (r < 50 && g < 50 && b < 50) {
-                    if (!(x >= ignoreMinX && x <= ignoreMaxX && y >= ignoreMinY && y >= ignoreMaxY))
+                    if (!(x >= ignoreMinX && x <= ignoreMaxX && y >= ignoreMinY && y <= ignoreMaxY))
                         collisionGrid[y][x] = true;
                 }
             }
@@ -881,6 +881,13 @@ int main(int argc, char* argv[]) {
         SDL_SetTextureScaleMode(spriteSheetTex, SDL_SCALEMODE_NEAREST);
     }
 
+    // Load Railway Map texture
+    SDL_Texture* railwayMapTex = IMG_LoadTexture(state.renderer, "assets/trainmap.png");
+    if (railwayMapTex) {
+        SDL_SetTextureScaleMode(railwayMapTex, SDL_SCALEMODE_NEAREST);
+    }
+    bool showRailwayMap = false;
+
     ImageInspectorState spriteInspector;
     spriteInspector.load(state.renderer, "assets/kris.png");
 
@@ -897,7 +904,7 @@ int main(int argc, char* argv[]) {
 
     Camera2D camera{ 0, 0, 640, 320 };
     bool showDialogue = false;
-    string dialogueText = "Press [Z] to interact with nearby objects or zones!";
+    string dialogueText = "Press [E] to interact with nearby objects or zones!";
 
     EventManager eventManager;
 
@@ -921,7 +928,7 @@ int main(int argc, char* argv[]) {
 
     eventManager.subscribe(EventType::Interact, [&](const GameEvent& ev) {
         stringstream ss;
-        ss << "[EVENT] Pressed 'Z' (Interact) at (" << (int)ev.posX << ", " << (int)ev.posY << ")";
+        ss << "[EVENT] Pressed 'E' (Interact) at (" << (int)ev.posX << ", " << (int)ev.posY << ")";
         if (ev.zoneRef) ss << " on " << ev.zoneRef->name;
         eventSystemLog.push_front(ss.str());
 
@@ -978,12 +985,16 @@ int main(int argc, char* argv[]) {
                     showDebugZones = !showDebugZones;
                 }
 
+                if (event.key.key == SDLK_M && currentState == GameState::Playing) {
+                    showRailwayMap = !showRailwayMap;
+                }
+
                 if (event.key.key == SDLK_ESCAPE) {
                     if (currentState == GameState::Playing) currentState = GameState::Paused;
                     else if (currentState == GameState::Paused) currentState = GameState::Playing;
                 }
 
-                if (event.key.key == SDLK_Z && currentState == GameState::Playing) {
+                if (event.key.key == SDLK_E && currentState == GameState::Playing) {
                     bool foundZone = false;
                     for (auto& zone : triggerZones) {
                         if (checkAABB(dst, zone.bounds)) {
@@ -1004,7 +1015,7 @@ int main(int argc, char* argv[]) {
             float dx = (float)(keys[SDL_SCANCODE_D] - keys[SDL_SCANCODE_A]);
             float dy = (float)(keys[SDL_SCANCODE_S] - keys[SDL_SCANCODE_W]);
 
-            if (panelQueue.empty()) {
+            if (panelQueue.empty() && !showRailwayMap) {
                 if (dx != 0.0f) { dst.x += dx * 180.0f * deltaTime; resolvePixelCollisions(dst, map, true, dx); }
                 if (dy != 0.0f) { dst.y += dy * 180.0f * deltaTime; resolvePixelCollisions(dst, map, false, dy); }
 
@@ -1131,6 +1142,7 @@ int main(int argc, char* argv[]) {
 
             if (ImGui::CollapsingHeader("Display Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::Checkbox("Show Static Dialogue", &showDialogue);
+                ImGui::Checkbox("Show Railway Map (M)", &showRailwayMap);
                 ImGui::Checkbox("Show Map Inspector Window", &showMapInspectorWindow);
                 ImGui::Checkbox("Show Audio System Window", &showAudioWindow);
                 ImGui::InputText("Static Text", &dialogueText[0], 128);
@@ -1186,6 +1198,17 @@ int main(int argc, char* argv[]) {
                 ImGui::End();
             }
 
+            // Render Railway Map Popup/Overlay via Dear ImGui when 'M' is pressed
+            if (showRailwayMap && railwayMapTex) {
+                ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
+                ImGui::Begin("Underground Railway Map", &showRailwayMap, ImGuiWindowFlags_NoCollapse);
+                ImGui::Text("Current Subway / Underground Network Map:");
+                ImGui::Separator();
+                ImVec2 availSize = ImGui::GetContentRegionAvail();
+                ImGui::Image((ImTextureID)railwayMapTex, availSize);
+                ImGui::End();
+            }
+
             if (showDialogue) renderDialogueBox(dialogueText.c_str(), gameViewport);
             renderMangaSystem();
 
@@ -1206,6 +1229,7 @@ int main(int argc, char* argv[]) {
     mapInspector.destroy();
 
     if (spriteSheetTex) SDL_DestroyTexture(spriteSheetTex);
+    if (railwayMapTex) SDL_DestroyTexture(railwayMapTex);
     if (debugPanelImg) SDL_DestroyTexture(debugPanelImg);
     if (map.visualTexture) SDL_DestroyTexture(map.visualTexture);
 
